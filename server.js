@@ -5,7 +5,7 @@ import { Server } from "socket.io";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "localhost";
-const port = 3000;
+const port = process.env.PORT || 3000;
 // when using middleware `hostname` and `port` must be provided below
 const app = next({ dev, hostname, port });
 const handler = app.getRequestHandler();
@@ -74,7 +74,7 @@ app.prepare().then(() => {
       }
     });
 
-    socket.on("hangup", async (data) => {
+    socket.on("hangup", (data) => {
       let socketIdToEmit;
       if (
         data.onGoingCall.participants.caller.userId === data.userHangingUpId
@@ -85,7 +85,7 @@ app.prepare().then(() => {
       }
 
       if (socketIdToEmit) {
-        io.to(socketIdToEmit).emit(hangup);
+        io.to(socketIdToEmit).emit("hangup");
       }
     });
   });

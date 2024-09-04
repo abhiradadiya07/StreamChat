@@ -62,7 +62,7 @@ const VideoCall = () => {
           />
         )}
       </div>
-      <div className="mt-10 flex items-center gap-4">
+      <div className="mt-10 flex items-center justify-center gap-4">
         <Button onClick={toggleMic}>
           {isMicOn && <MdMicOff size={28} />}
           {!isMicOn && <MdMic size={28} />}
