@@ -1,16 +1,17 @@
 "use client";
 
-import { OngoingCall, Participants, SocketUser } from "@/types";
+import { OngoingCall, Participants, PeerData, SocketUser } from "@/types";
 import { useUser } from "@clerk/nextjs";
 import {
   createContext,
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import { io, Socket } from "socket.io-client";
-
+import Peer, { SignalData } from "simple-peer";
 interface iSocketContext {
   onlineUsers: SocketUser[] | null;
   handleCall: (user: SocketUser) => void;
@@ -31,6 +32,9 @@ export const SocketContextProvider = ({
   const [onlineUsers, setOnlineUsers] = useState<SocketUser[] | null>(null);
   const [onGoingCall, setOnGoingCall] = useState<OngoingCall | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [peer, setPeer] = useState<PeerData | null>(null);
+  const peerConnection = useRef<RTCPeerConnection | null>(null);
 
   const currentSocketUser = onlineUsers?.find(
     (onlineUsers) => onlineUsers.userId === user?.id
@@ -94,13 +98,96 @@ export const SocketContextProvider = ({
     [socket, user, onGoingCall]
   );
 
+  const hangUpCall = useCallback(async () => {}, []);
+  // create peer
+  const createPeer = useCallback(
+    (stream: MediaStream, initiator: boolean) => {
+      const iceServers: RTCIceServer[] = [
+        {
+          urls: [
+            "stun:stun.l.google.com:19302",
+            "stun:stun1.l.google.com:19302",
+            "stun:stun2.l.google.com:19302",
+          ],
+        },
+      ];
+
+      // const configuration = {
+      //   iceServers: [{ urls: "stun:stun.l.google.com:19302" }], // Use STUN server
+      // };
+      // const peerConnection = new RTCPeerConnection(configuration);
+
+      const peer = new Peer({
+        stream,
+        initiator,
+        trickle: true,
+        config: { iceServers },
+      });
+
+      peer.on("stream", (stream) => {
+        setPeer((prevPeer) => {
+          if (prevPeer) {
+            return { ...prevPeer, stream };
+          }
+          return prevPeer;
+        });
+      });
+
+      peer.on("error", console.error);
+      peer.on("close", () => hangUpCall());
+
+      const rtcPeerConnection: RTCPeerConnection = (peer as any)._pc;
+
+      rtcPeerConnection.oniceconnectionstatechange = async () => {
+        if (
+          rtcPeerConnection.iceConnectionState === "disconnected" ||
+          rtcPeerConnection.iceConnectionState === "failed"
+        ) {
+          await hangUpCall();
+        }
+      };
+      return peer;
+    },
+    [onGoingCall, setPeer]
+  );
+
   // Join Call
   const handleJoinCall = useCallback(
-    (onGoingCall: OngoingCall) => {
-      console.log(onGoingCall);
+    async (onGoingCall: OngoingCall) => {
+      setOnGoingCall((prev) => {
+        if (prev) {
+          return { ...prev, isRinging: false };
+        }
+        return prev;
+      });
+
+      const stream = await getMediaStream();
+      if (!stream) {
+        console.log("Could not get stream in handle join function");
+        return;
+      }
+
+      const newPeer = createPeer(stream, true);
+      setPeer({
+        peerConnection: newPeer,
+        participantUser: onGoingCall.participants.caller,
+        stream: undefined,
+      });
+
+      newPeer.on("signal", async (data: SignalData) => {
+        if (socket) {
+          // emit offer
+          socket.emit("webRtcSignal", {
+            sdp: data,
+            onGoingCall,
+            isCaller: false,
+          });
+        }
+      });
     },
     [socket, currentSocketUser]
   );
+
   // initializing a socket
   useEffect(() => {
     const newSocket = io();
@@ -157,6 +244,36 @@ export const SocketContextProvider = ({
       socket.off("incomingCall", onIncomingCall);
     };
   }, [socket, isSocketConnected, onIncomingCall]);
+
+  // Set up the peer connection and add the media stream tracks
+  // const setupPeerConnection = (stream) => {
+  //   const configuration = {
+  //     iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+  //   };
+  //   // peerConnection.current = new RTCPeerConnection(configuration);
+  //   // Add each track from the local stream to the peer connection
+  //   // stream.getTracks().forEach((track) => {
+  //   //   peerConnection?.current.addTrack(track, stream);
+  //   // });
+
+  //   // // Listen for remote stream
+  //   // peerConnection.current.ontrack = (event) => {
+  //   //   setRemoteStream(event.streams[0]);
+  //   // };
+
+  //   // // Listen for ice candidate events
+  //   // peerConnection.current.onicecandidate = (event) => {
+  //     if (event.candidate) {
+  //       socketRef.current.send(
+  //         JSON.stringify({
+  //           type: "ice-candidate",
+  //           candidate: event.candidate,
+  //           roomID,
+  //         })
+  //       );
+  //     }
+  //   };
+  // };
 
   return (
     <SocketContext.Provider
