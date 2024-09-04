@@ -10,10 +10,9 @@ const port = 3000;
 const app = next({ dev, hostname, port });
 const handler = app.getRequestHandler();
 
-export let io;
 app.prepare().then(() => {
   const httpServer = createServer(handler);
-  io = new Server(httpServer);
+  const io = new Server(httpServer);
   let onlineUsers = [];
   io.on("connection", (socket) => {
     // ...
@@ -45,6 +44,33 @@ app.prepare().then(() => {
           "incomingCall",
           participants
         );
+      }
+    });
+
+    socket.on("webRtcSignal", (data) => {
+      // console.log(data.isCaller,"*********");
+
+      if (data.isCaller) {
+        // console.log(
+        //   "receiver",
+        //   data.onGoingCall.participants.receiver.socketId
+        // );
+
+        if (data.onGoingCall.participants.receiver.socketId) {
+          io.to(data.onGoingCall.participants.receiver.socketId).emit(
+            "webRtcSignal",
+            data
+          );
+        }
+      } else {
+        if (data.onGoingCall.participants.caller.socketId) {
+          // console.log("caller", data.onGoingCall.participants.caller.socketId);
+
+          io.to(data.onGoingCall.participants.caller.socketId).emit(
+            "webRtcSignal",
+            data
+          );
+        }
       }
     });
   });

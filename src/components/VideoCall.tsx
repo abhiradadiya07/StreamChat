@@ -7,7 +7,7 @@ import { Button } from "./ui/button";
 import { MdMic, MdMicOff, MdVideocam, MdVideocamOff } from "react-icons/md";
 
 const VideoCall = () => {
-  const { localStream } = useSocket();
+  const { localStream, onGoingCall, peer } = useSocket();
   const [isMicOn, setIsMicOn] = useState(true);
   const [isVideoOn, setIsVideoOn] = useState(true);
 
@@ -19,6 +19,7 @@ const VideoCall = () => {
       setIsMicOn(audioTracks.enabled);
     }
   }, [localStream]);
+
   const toggleVideo = useCallback(() => {
     if (localStream) {
       const videoTracks = localStream.getVideoTracks()[0];
@@ -35,6 +36,8 @@ const VideoCall = () => {
     }
   }, [localStream]);
 
+  const isOnCall = localStream && peer && onGoingCall ? true : false;
+
   return (
     <div>
       <div>
@@ -42,7 +45,15 @@ const VideoCall = () => {
           <VideoContainer
             stream={localStream}
             isLocalStream={true}
-            isOnCall={false}
+            isOnCall={isOnCall}
+            // isVideoOn={isVideoOn}
+          />
+        )}
+        {peer && peer.stream && (
+          <VideoContainer
+            stream={peer.stream}
+            isLocalStream={false}
+            isOnCall={isOnCall}
             // isVideoOn={isVideoOn}
           />
         )}

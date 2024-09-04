@@ -1,6 +1,7 @@
 import { useUser } from "@clerk/nextjs";
 import Image from "next/image";
 import React, { useEffect, useRef } from "react";
+import { Button } from "./ui/button";
 
 interface iVideoCantainer {
   stream: MediaStream | null;
@@ -19,30 +20,23 @@ iVideoCantainer) => {
   useEffect(() => {
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
+      console.log();
     }
   }, [stream]);
 
   return (
-    <video
-      className="rounded border w-[800px]"
-      ref={videoRef}
-      autoPlay
-      playsInline
-      muted={isLocalStream}
-    />
-    // <div>
-    //   {/* {isVideoOn ? ( */}
-    //   <video
-    //     className="rounded border w-[800px]"
-    //     ref={videoRef}
-    //     autoPlay
-    //     playsInline
-    //     muted={isLocalStream}
-    //   />
-    //   {/* ) : ( */}
-    //   {/* <div>Video is off</div> */}
-    //   {/* )} */}
-    // </div>
+    <>
+      <video
+        className="rounded border w-[800px]"
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted={isLocalStream}
+      />
+      {/* <div>
+        {isLocalStream ? <Button>Hello</Button> : <Button>World</Button>}
+      </div> */}
+    </>
   );
 };
 

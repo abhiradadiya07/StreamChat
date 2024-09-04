@@ -18,6 +18,7 @@ interface iSocketContext {
   handleJoinCall: (onGoingCall: OngoingCall) => void;
   onGoingCall: OngoingCall | null;
   localStream: MediaStream | null;
+  peer: PeerData | null;
 }
 export const SocketContext = createContext<iSocketContext | null>(null);
 
@@ -106,8 +107,8 @@ export const SocketContextProvider = ({
         {
           urls: [
             "stun:stun.l.google.com:19302",
-            "stun:stun1.l.google.com:19302",
-            "stun:stun2.l.google.com:19302",
+            // "stun:stun1.l.google.com:19302",
+            // "stun:stun2.l.google.com:19302",
           ],
         },
       ];
@@ -151,6 +152,43 @@ export const SocketContextProvider = ({
     [onGoingCall, setPeer]
   );
 
+  const completePeerConnection = useCallback(
+    async (connectionData: {
+      sdp: SignalData;
+      onGoingCall: OngoingCall;
+      isCaller: boolean;
+    }) => {
+      if (!localStream) {
+        console.log("Missing local stream");
+        return;
+      }
+      console.log("peer");
+
+      if (peer) {
+        peer.peerConnection?.signal(connectionData.sdp);
+        return;
+      }
+      const newPeer = createPeer(localStream, true);
+      setPeer({
+        peerConnection: newPeer,
+        participantUser: connectionData.onGoingCall.participants.receiver,
+        stream: undefined,
+      });
+
+      newPeer.on("signal", async (data: SignalData) => {
+        if (socket) {
+          // emit offer
+          socket.emit("webRtcSignal", {
+            sdp: data,
+            onGoingCall,
+            isCaller: true,
+          });
+        }
+      });
+    },
+    [localStream, peer, createPeer, onGoingCall]
+  );
+
   // Join Call
   const handleJoinCall = useCallback(
     async (onGoingCall: OngoingCall) => {
@@ -168,6 +206,7 @@ export const SocketContextProvider = ({
       }
 
       const newPeer = createPeer(stream, true);
+
       setPeer({
         peerConnection: newPeer,
         participantUser: onGoingCall.participants.caller,
@@ -182,6 +221,7 @@ export const SocketContextProvider = ({
             onGoingCall,
             isCaller: false,
           });
+          console.log("sent");
         }
       });
     },
@@ -240,29 +280,31 @@ export const SocketContextProvider = ({
     if (!socket || !isSocketConnected) return;
 
     socket.on("incomingCall", onIncomingCall);
+    socket.on("webRtcSignal", completePeerConnection);
     return () => {
       socket.off("incomingCall", onIncomingCall);
+      socket.off("webRtcSignal", completePeerConnection);
     };
-  }, [socket, isSocketConnected, onIncomingCall]);
+  }, [socket, isSocketConnected, onIncomingCall, completePeerConnection, user]);
 
   // Set up the peer connection and add the media stream tracks
   // const setupPeerConnection = (stream) => {
   //   const configuration = {
   //     iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
   //   };
-  //   // peerConnection.current = new RTCPeerConnection(configuration);
-  //   // Add each track from the local stream to the peer connection
-  //   // stream.getTracks().forEach((track) => {
-  //   //   peerConnection?.current.addTrack(track, stream);
-  //   // });
+  // peerConnection.current = new RTCPeerConnection(configuration);
+  // Add each track from the local stream to the peer connection
+  // stream.getTracks().forEach((track) => {
+  //   peerConnection?.current.addTrack(track, stream);
+  // });
 
   //   // // Listen for remote stream
-  //   // peerConnection.current.ontrack = (event) => {
-  //   //   setRemoteStream(event.streams[0]);
-  //   // };
+  // peerConnection.current.ontrack = (event) => {
+  //   setRemoteStream(event.streams[0]);
+  // };
 
   //   // // Listen for ice candidate events
-  //   // peerConnection.current.onicecandidate = (event) => {
+  // peerConnection.current.onicecandidate = (event) => {
   //     if (event.candidate) {
   //       socketRef.current.send(
   //         JSON.stringify({
@@ -283,6 +325,7 @@ export const SocketContextProvider = ({
         handleJoinCall,
         onGoingCall,
         localStream,
+        peer,
       }}
     >
       {children}
