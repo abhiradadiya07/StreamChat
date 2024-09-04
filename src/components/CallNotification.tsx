@@ -6,7 +6,7 @@ import { Button } from "./ui/button";
 import { MdCall, MdCallEnd } from "react-icons/md";
 
 const CallNotification = () => {
-  const { onGoingCall, handleJoinCall } = useSocket();
+  const { onGoingCall, handleJoinCall, hangUpCall } = useSocket();
   if (!onGoingCall?.isRinging) return;
   return (
     <div className="absolute bg-slate-500 w-screen h-screen top-0 left-0 flex items-center justify-center  bg-opacity-70">
@@ -20,12 +20,20 @@ const CallNotification = () => {
         <p className="text-sm mb-2 font-bold">Incoming Call</p>
         <div className="flex gap-4">
           <Button
-            onClick={()=>handleJoinCall(onGoingCall)}
+            onClick={() => handleJoinCall(onGoingCall)}
             className="bg-green-600 hover:bg-green-800"
           >
             <MdCall size={24} />
           </Button>
-          <Button className="bg-red-600 hover:bg-red-800">
+          <Button
+            className="bg-red-600 hover:bg-red-800"
+            onClick={() => {
+              hangUpCall({
+                onGoingCall: onGoingCall ? onGoingCall : undefined,
+                isEmitHangup: true,
+              });
+            }}
+          >
             <MdCallEnd size={24} />
           </Button>
         </div>

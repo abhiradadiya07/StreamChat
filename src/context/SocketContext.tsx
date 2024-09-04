@@ -14,11 +14,16 @@ import { io, Socket } from "socket.io-client";
 import Peer, { SignalData } from "simple-peer";
 interface iSocketContext {
   onlineUsers: SocketUser[] | null;
-  handleCall: (user: SocketUser) => void;
-  handleJoinCall: (onGoingCall: OngoingCall) => void;
   onGoingCall: OngoingCall | null;
   localStream: MediaStream | null;
   peer: PeerData | null;
+  isCallEnded: boolean;
+  handleCall: (user: SocketUser) => void;
+  handleJoinCall: (onGoingCall: OngoingCall) => void;
+  hangUpCall: (data: {
+    onGoingCall?: OngoingCall;
+    isEmitHangup?: boolean;
+  }) => void;
 }
 export const SocketContext = createContext<iSocketContext | null>(null);
 
@@ -36,6 +41,7 @@ export const SocketContextProvider = ({
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [peer, setPeer] = useState<PeerData | null>(null);
   const peerConnection = useRef<RTCPeerConnection | null>(null);
+  const [isCallEnded, setIsCallEnded] = useState(false);
 
   const currentSocketUser = onlineUsers?.find(
     (onlineUsers) => onlineUsers.userId === user?.id
@@ -72,6 +78,7 @@ export const SocketContextProvider = ({
 
   const handleCall = useCallback(
     async (user: SocketUser) => {
+      setIsCallEnded(false);
       if (!currentSocketUser || !socket) return;
 
       const stream = await getMediaStream();
@@ -99,7 +106,31 @@ export const SocketContextProvider = ({
     [socket, user, onGoingCall]
   );
 
-  const hangUpCall = useCallback(async () => {}, []);
+  const hangUpCall = useCallback(
+    async (data: {
+      onGoingCall?: OngoingCall | null;
+      isEmitHangup?: boolean;
+    }) => {
+      if (socket && user && data?.onGoingCall && data?.isEmitHangup) {
+        socket.emit("hangup", {
+          onGoingCall: data.onGoingCall,
+          userHangingUpId: user.id,
+        });
+      }
+
+      setOnGoingCall(null);
+      setPeer(null);
+      if (localStream) {
+        localStream.getTracks().forEach((track) => {
+          track.stop();
+        });
+        setLocalStream(null);
+      }
+
+      setIsCallEnded(true);
+    },
+    [socket, user, localStream]
+  );
   // create peer
   const createPeer = useCallback(
     (stream: MediaStream, initiator: boolean) => {
@@ -135,7 +166,12 @@ export const SocketContextProvider = ({
       });
 
       peer.on("error", console.error);
-      peer.on("close", () => hangUpCall());
+      peer.on("close", () =>
+        hangUpCall({
+          onGoingCall: onGoingCall ? onGoingCall : undefined,
+          isEmitHangup: true,
+        })
+      );
 
       const rtcPeerConnection: RTCPeerConnection = (peer as any)._pc;
 
@@ -144,7 +180,10 @@ export const SocketContextProvider = ({
           rtcPeerConnection.iceConnectionState === "disconnected" ||
           rtcPeerConnection.iceConnectionState === "failed"
         ) {
-          await hangUpCall();
+          await hangUpCall({
+            onGoingCall: onGoingCall ? onGoingCall : undefined,
+            isEmitHangup: true,
+          });
         }
       };
       return peer;
@@ -192,6 +231,7 @@ export const SocketContextProvider = ({
   // Join Call
   const handleJoinCall = useCallback(
     async (onGoingCall: OngoingCall) => {
+      setIsCallEnded(false);
       setOnGoingCall((prev) => {
         if (prev) {
           return { ...prev, isRinging: false };
@@ -202,6 +242,10 @@ export const SocketContextProvider = ({
       const stream = await getMediaStream();
       if (!stream) {
         console.log("Could not get stream in handle join function");
+        hangUpCall({
+          onGoingCall: onGoingCall ? onGoingCall : undefined,
+          isEmitHangup: true,
+        });
         return;
       }
 
@@ -281,11 +325,20 @@ export const SocketContextProvider = ({
 
     socket.on("incomingCall", onIncomingCall);
     socket.on("webRtcSignal", completePeerConnection);
+    socket.on("hangup", hangUpCall);
     return () => {
       socket.off("incomingCall", onIncomingCall);
       socket.off("webRtcSignal", completePeerConnection);
+      socket.off("hangup", hangUpCall);
     };
-  }, [socket, isSocketConnected, onIncomingCall, completePeerConnection, user]);
+  }, [
+    socket,
+    isSocketConnected,
+    onIncomingCall,
+    completePeerConnection,
+    hangUpCall,
+    user,
+  ]);
 
   // Set up the peer connection and add the media stream tracks
   // const setupPeerConnection = (stream) => {
@@ -317,6 +370,15 @@ export const SocketContextProvider = ({
   //   };
   // };
 
+  useEffect(() => {
+    let timeout: ReturnType<typeof setTimeout>;
+    if (isCallEnded) {
+      timeout = setTimeout(() => {
+        setIsCallEnded(false);
+      }, 2000);
+    }
+    return () => clearTimeout(timeout);
+  }, [isCallEnded]);
   return (
     <SocketContext.Provider
       value={{
@@ -326,6 +388,8 @@ export const SocketContextProvider = ({
         onGoingCall,
         localStream,
         peer,
+        hangUpCall,
+        isCallEnded,
       }}
     >
       {children}

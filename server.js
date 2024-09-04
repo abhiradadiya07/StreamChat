@@ -73,6 +73,21 @@ app.prepare().then(() => {
         }
       }
     });
+
+    socket.on("hangup", async (data) => {
+      let socketIdToEmit;
+      if (
+        data.onGoingCall.participants.caller.userId === data.userHangingUpId
+      ) {
+        socketIdToEmit = data.onGoingCall.participants.receiver.socketId;
+      } else {
+        socketIdToEmit = data.onGoingCall.participants.caller.socketId;
+      }
+
+      if (socketIdToEmit) {
+        io.to(socketIdToEmit).emit(hangup);
+      }
+    });
   });
 
   httpServer

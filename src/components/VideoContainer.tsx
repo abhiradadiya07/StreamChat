@@ -2,6 +2,7 @@ import { useUser } from "@clerk/nextjs";
 import Image from "next/image";
 import React, { useEffect, useRef } from "react";
 import { Button } from "./ui/button";
+import { cn } from "@/lib/utils";
 
 interface iVideoCantainer {
   stream: MediaStream | null;
@@ -27,7 +28,12 @@ iVideoCantainer) => {
   return (
     <>
       <video
-        className="rounded border w-[800px]"
+        className={cn(
+          "rounded border w-[800px]",
+          isLocalStream &&
+            isOnCall &&
+            "w-[200px] h-auto absolute border-purple-500 border-2 mt-2 ml-2"
+        )}
         ref={videoRef}
         autoPlay
         playsInline

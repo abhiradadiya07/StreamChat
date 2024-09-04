@@ -7,7 +7,8 @@ import { Button } from "./ui/button";
 import { MdMic, MdMicOff, MdVideocam, MdVideocamOff } from "react-icons/md";
 
 const VideoCall = () => {
-  const { localStream, onGoingCall, peer } = useSocket();
+  const { localStream, onGoingCall, peer, hangUpCall, isCallEnded } =
+    useSocket();
   const [isMicOn, setIsMicOn] = useState(true);
   const [isVideoOn, setIsVideoOn] = useState(true);
 
@@ -37,10 +38,13 @@ const VideoCall = () => {
   }, [localStream]);
 
   const isOnCall = localStream && peer && onGoingCall ? true : false;
-
+  if (isCallEnded) {
+    return <div className="mt-5 text-rose-500 text-center">Call Ended</div>;
+  }
+  if (!localStream && !peer) return;
   return (
     <div>
-      <div>
+      <div className="mt-4 relative max-w-[800px] mx-auto">
         {localStream && (
           <VideoContainer
             stream={localStream}
@@ -63,7 +67,17 @@ const VideoCall = () => {
           {isMicOn && <MdMicOff size={28} />}
           {!isMicOn && <MdMic size={28} />}
         </Button>
-        <Button className="bg-red-500 hover:bg-red-600">End Call</Button>
+        <Button
+          className="bg-red-500 hover:bg-red-600"
+          onClick={() => {
+            hangUpCall({
+              onGoingCall: onGoingCall ? onGoingCall : undefined,
+              isEmitHangup: true,
+            });
+          }}
+        >
+          End Call
+        </Button>
         <Button onClick={toggleVideo}>
           {isVideoOn && <MdVideocamOff size={28} />}
           {!isVideoOn && <MdVideocam size={28} />}
